@@ -69,9 +69,8 @@
 \metroset{block=fill}
 \metroset{titleformat frame=smallcaps}
 
-\title{Structured concurrency in Kotlin coroutines}
+\title{Structured concurrency with Kotlin coroutines}
 %\subtitle{Ariadne's thread in Kotlin models of concurrency}
-\subtitle{A short walk through}
 
 \date{\today}
 \author[A. Candolini]{Alessandro Candolini}
@@ -86,6 +85,230 @@
   \setbeamertemplate{section in toc}[sections numbered]
   \tableofcontents[hideallsubsections]
 \end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+interface Contract { // mvp contract
+
+    interface View {
+    
+    }
+
+    interface Presenter {
+   
+    }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+interface Contract { // mvp contract example
+
+    interface View {
+        fun showLoading()
+        fun hideLoading()
+        fun showError(error: String)
+        fun showResults(items: List<Item>)
+    }
+
+    interface Presenter {
+        fun onRefresh()
+    }
+}
+\end{lstlisting}
+\end{frame}
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter : Contract.Presenter {
+
+    override fun onRefresh() = TODO()
+
+}
+\end{lstlisting}
+\end{frame}
+\begin{frame}[fragile]
+Two-way bindings (with passive view):
+\begin{itemize}
+\item View instance holds a reference to its presenter
+\item Presenter instance holds a reference to the associated view  instance 
+\end{itemize}
+
+(Circular dependence; see 
+\url{https://www.martinfowler.com/eaaDev/uiArchs.html})
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter : Contract.Presenter {
+
+    override fun onRefresh() {
+      view.showLoading()  // <--  view?
+    }
+}
+
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter( 
+        private val view: Contract.View
+) : Contract.Presenter {
+
+    override fun onRefresh() {
+      view.showLoading()
+    }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+interface Contract {
+
+    interface View /* ... */
+
+    interface Presenter {
+        fun onBind(view : View) // <---
+        fun unbind()            // <---
+        fun onRefresh()
+    }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter : Contract.Presenter {
+
+    private var view : Contract.View? = null
+
+    override fun onBind(view: Contract.View) {
+        this.view = view
+    }
+    override fun unbind() {
+        this.view = null
+    }
+    override fun onRefresh() {
+        view?.showLoading()
+    }
+}
+\end{lstlisting}
+\end{frame}
+
+\plain{java.lang.IllegalStateException}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+interface UseCase {
+
+    fun fetch(): List<Item>
+
+}
+\end{lstlisting}
+\end{frame}
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter(
+        private val view: Contract.View,
+        private val useCase: UseCase
+) : Contract.Presenter {
+
+    override fun onRefresh() {
+        val items = useCase.fetch()
+        view.showItems(items)
+    }
+
+    override fun onSubmit() = TODO()
+
+}
+\end{lstlisting}
+\end{frame}
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+
+
+
+
+
+
+
+\plain{Questions?}
+
+\end{document}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
 
 \plain{Questions?}
 
