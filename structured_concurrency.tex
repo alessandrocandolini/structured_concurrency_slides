@@ -16,6 +16,8 @@
 \usepackage{pgfplots}
 \usepgfplotslibrary{dateplot}
 \usepackage{tikz}
+\usepackage{tikz-uml}
+\usetikzlibrary{positioning,chains,fit,shapes,calc}
 \usetikzlibrary{positioning,chains,fit,shapes,calc,automata,positioning}
 \newcommand{\mycomment}[1]{}
 \usepackage{fancyvrb}
@@ -86,6 +88,9 @@
   \tableofcontents[hideallsubsections]
 \end{frame}
 
+\section{Warm up}
+
+
 \begin{frame}[fragile]
 \begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
 interface Contract { // mvp contract
@@ -100,10 +105,27 @@ interface Contract { // mvp contract
 }
 \end{lstlisting}
 \end{frame}
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+interface Contract { // higher level contract 
+
+    interface View {
+        fun render(state : ViewState)
+    }
+
+    interface Presenter {
+        fun perform(action : ViewAction)
+    }
+
+    sealed class ViewAction
+    sealed class ViewState
+}
+\end{lstlisting}
+\end{frame}
 
 \begin{frame}[fragile]
 \begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-interface Contract { // mvp contract example
+interface Contract { // more granular contract 
 
     interface View {
         fun showLoading()
@@ -118,25 +140,51 @@ interface Contract { // mvp contract example
 }
 \end{lstlisting}
 \end{frame}
+
+
 \begin{frame}[fragile]
 \begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-class Presenter : Contract.Presenter {
+// usually  
+
+class SomeActivity : Activity(), Contract.View 
+
+class SomeFragment: Fragment(), Contract.View 
+
+class SomeCustomView : ViewGroup(), Contract.View 
+
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter : Contract.Presenter { 
 
     override fun onRefresh() = TODO()
 
 }
 \end{lstlisting}
 \end{frame}
+
 \begin{frame}[fragile]
-Two-way bindings (with passive view):
+\begin{itemize}
+\item Two-way bindings 
+\item Passive view 
+\end{itemize}
+\end{frame}
+\begin{frame}[fragile]
 \begin{itemize}
 \item View instance holds a reference to its presenter
-\item Presenter instance holds a reference to the associated view  instance 
+\item Presenter instance holds a reference to the associated view  instance%
+\footnote{%
+Circular dependencies; see 
+\url{https://www.martinfowler.com/eaaDev/uiArchs.html}
+}
 \end{itemize}
-
-(Circular dependence; see 
-\url{https://www.martinfowler.com/eaaDev/uiArchs.html})
 \end{frame}
+
+
+
 
 \begin{frame}[fragile]
 \begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
@@ -170,7 +218,7 @@ interface Contract {
     interface View /* ... */
 
     interface Presenter {
-        fun onBind(view : View) // <---
+        fun bind(view : View) // <---
         fun unbind()            // <---
         fun onRefresh()
     }
@@ -184,7 +232,7 @@ class Presenter : Contract.Presenter {
 
     private var view : Contract.View? = null
 
-    override fun onBind(view: Contract.View) {
+    override fun bind(view: Contract.View) {
         this.view = view
     }
     override fun unbind() {
@@ -197,7 +245,226 @@ class Presenter : Contract.Presenter {
 \end{lstlisting}
 \end{frame}
 
-\plain{java.lang.IllegalStateException}
+\plain{java.lang.IllegalStateException(s)}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+override fun onSaveInstanceState(outState: Bundle)
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class SomeFragment : Fragment(), Contract.View {
+  @Inject
+  lateinit var presenter: Contract.Presenter
+
+  override fun onViewCreated(view: View,
+          savedInstanceState: Bundle?) {
+     // ...
+     presenter.bind(this)
+     presenter.onRefresh()
+  }
+
+  override fun onDestroyView() {
+     presenter.unbind()
+     super.onDestroyView()
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+// why not this?
+class SomeFragment : Fragment(), Contract.View {
+  // ...
+
+  override fun onSaveInstanceState(outState: Bundle) {
+     presenter.unbind()
+     super.onSaveInstanceState(outState)
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+// why not this?
+class Presenter(view : Contract.View) : 
+        Contract.Presenter {
+
+  private var isAttached : Boolean = false
+
+  override fun bind() {isAttached = true}
+  override fun unbind() {isAttached = false}
+
+  override fun onRefresh() {
+    if(isAttached) { 
+      view.showLoading()
+    }
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+// what about memory leaks 
+class Presenter(view : Contract.View) : 
+        Contract.Presenter {
+
+  private var isAttached : Boolean = false
+
+  override fun bind() {isAttached = true}
+  override fun unbind() {isAttached = false}
+
+  override fun onRefresh() {
+    if(isAttached) { 
+      view.showLoading()
+    }
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+Can we handle this wiring somewhere else?
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class SomeFragment : Fragment(), Contract.View {
+  // ...
+
+  override fun showLoading() {
+    if (isAdded() ) {
+       // update the android view 
+    }
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class SomeFragment : Fragment(), Contract.View {
+  // ...
+
+  override fun showA() = if(isAdded()){/* ... */}
+  override fun hideA() = if(isAdded()){/* ... */}
+  override fun showB() = if(isAdded()){/* ... */}
+  override fun hideB() = if(isAdded()){/* ... */}
+  override fun showC() = if(isAdded()){/* ... */}
+  override fun hideC() = if(isAdded()){/* ... */}
+}
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+		\begin{figure}
+			\centering
+\begin{tikzpicture}
+\umlsimpleclass [minimum height=15ex,width=15ex] {V}
+\umlsimpleclass [x=6,minimum height=15ex,width=15ex] {P}
+\umlsimpleclass[x=3,width=5ex]{B}
+\umlunicompo[geometry=|-|]{V}{B}
+\umlunicompo[geometry=|-|]{B}{P}
+\end{tikzpicture}
+		\end{figure}
+
+
+\end{frame}
+
+
+
+
+
+
+
+
+
+
+
+\begin{frame}[fragile]
+Options are:
+\begin{itemize}
+\item Presenter
+\item View 
+\item ``Binder`` between view and presenter
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+Pros:
+\begin{itemize}
+\item Testability 
+\end{itemize}
+Cons:%
+\footnote{Base class/type class can help though}
+\begin{itemize}
+\item Verbosity
+\item Noise in the contracts 
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
 
 \begin{frame}[fragile]
 \begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
@@ -214,6 +481,117 @@ class Presenter : Contract.Presenter {
 \end{lstlisting}
 \end{frame}
 
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
 \begin{frame}[fragile]
 \begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
 \end{lstlisting}
@@ -229,6 +607,114 @@ class Presenter : Contract.Presenter {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\section{Without structured concurrency}
+
+
+
+
+\section{Welcome structured concurrency}
+
+
+\section{Exceptions}
 
 
 
