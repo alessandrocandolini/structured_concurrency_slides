@@ -130,7 +130,7 @@ interface Contract { // more granular contract
     interface View {
         fun showLoading()
         fun hideLoading()
-        fun showError(error: String)
+        fun showError(error: CharSequence)
         fun showResults(items: List<Item>)
     }
 
@@ -310,19 +310,41 @@ class Presenter(view : Contract.View) :
 
 \begin{frame}[fragile]
 \begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-// what about memory leaks 
+// what about memory leaks ?
 class Presenter(view : Contract.View) : 
         Contract.Presenter {
-
-  private var isAttached : Boolean = false
-
-  override fun bind() {isAttached = true}
-  override fun unbind() {isAttached = false}
+  private val executor : Executor = /*...*/
 
   override fun onRefresh() {
-    if(isAttached) { 
-      view.showLoading()
-    }
+    view.showLoading()  
+    executor.execute {
+        // long-running operation
+        updateUI()
+    } 
+  }
+
+  private fun updateUI() {
+   view.hideLoading()  
+  }
+}
+\end{lstlisting}
+\end{frame}
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter(view : Contract.View) : 
+        Contract.Presenter {
+  private val executor : Executor = /*...*/
+
+  override fun onRefresh() {
+    view.showLoading()  
+    executor.execute {
+        // long-running operation
+        updateUI()
+    } 
+  }
+
+  private fun updateUI() {
+    // do nothing!
   }
 }
 \end{lstlisting}
@@ -412,6 +434,509 @@ Cons:%
 \end{frame}
 
 \begin{frame}[fragile]
+\frametitle{Moving things out of the UI thread}
+Who is responsible?
+\begin{itemize}
+\item View?
+\item Binder (if any)?
+\item Presenter?
+\item Interactors/usecases?
+\item Repository/service layer?
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+sealed class Model
+
+interface UseCase {
+    suspend fun fetch(): Model
+}
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter(private val useCase: UseCase) : 
+      Contract.Presenter {
+ 
+ // ...
+
+  override fun onRefresh() { // deprecated way
+    launch(Dispatchers.IO) {
+      val model =  useCase.fetch()
+      launch(Dispatchers.Main) {
+        view?.showResults(model)
+      }
+    }
+  }
+
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter(private val useCase: UseCase) : 
+      Contract.Presenter {
+  
+// ...
+
+  override fun onRefresh() { // more on this later!
+    GlobalScope.launch(Dispatchers.IO) {
+      val model =  useCase.fetch()
+      GlobalScope.launch(Dispatchers.Main) {
+        view?.showResults(model)
+      }
+    }
+  }
+
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter(
+  private val useCase: UseCase
+  private val ui: CoroutineDispatcher,
+  private val io: CoroutineDispatcher
+) : Contract.Presenter {
+  // ...
+
+  override fun onRefresh() {
+    launch(io) {
+      val model =  useCase.fetch()
+      launch(ui) {
+        view?.showResults(model)
+      }
+    }
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+What's the difference between 
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+    launch(ui) { 
+      /*...*/
+      launch(io) {
+        /*...*/
+      }
+    }
+\end{lstlisting}
+and
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+    launch(io) { 
+      /*...*/
+      launch(ui) {
+        /*...*/
+      }
+    }
+\end{lstlisting}
+\end{frame}
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter(
+  private val useCase: UseCase
+  private val ui: CoroutineDispatcher,
+  private val io: CoroutineDispatcher
+) : Contract.Presenter {
+  // ...
+
+  override fun onRefresh() {
+    launch(ui) {
+      val model = withContext(io){
+         useCase.fetch()
+      }
+      view?.showResults(model)
+    }
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter(
+  private val useCase: UseCase
+  private val ui: CoroutineDispatcher,
+  private val io: CoroutineDispatcher
+) : Contract.Presenter {
+  // ...
+
+  override fun onRefresh() {
+    launch(ui) { 
+      try {
+        val model = /*...*/
+        view?.showResults(model)
+      } catch(e : Exception) { // more on this later!
+        view?.showError(/*...*/)
+      }
+    }
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+What's the difference between 
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+fun onRefresh() { 
+  launch(dispatcher) { 
+      /*...*/
+  }
+}
+\end{lstlisting}
+and
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+suspend fun onRefresh() { 
+  launch(dispatcher) { 
+      /*...*/
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+suspend fun f(a : A) : B 
+suspend fun g(b : B) : C 
+
+suspend fun h(a : A) : C = g(f(a)) // no concurrency
+\end{lstlisting}
+\end{frame}
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+suspend fun f(a : A, callback : Callback<A>)
+suspend fun g(b : B, callback : Callback<C>) 
+
+interface Callback<T> {
+  fun onSuccess(t : T)
+  fun onError(throwable : Throwable) 
+}
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+fun h(a:A, callback: Callback<C>) {
+  f(a, object : Callback<B> {
+       override fun onSuccess(t: B) {
+         g(t,object : Callback<C> {
+            override fun onSuccess(t: C) {
+               callback.onSuccess(t)
+            }
+            override fun onError(throwable: Throwable) {
+               callback.onError(throwable)
+            }
+         })
+       }
+       override fun onError(throwable: Throwable) {
+         callback.onError(throwable)
+       }
+  })
+}
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter(dispatcher : CoroutineDispatcher) {
+  
+  fun doA() {
+     launch(dispatcher) { /*...*/ }
+  }
+  fun doB() {
+     launch(dispatcher) { /*...*/ }
+  }
+  fun doC() {
+     launch(dispatcher) { /*...*/ }
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{alertblock}{Concurrency}
+Two operations are concurrent if they are not ordered by \emph{happens before} relation.%
+		\footnote{Leslie Lamport's paper \url{https://www.microsoft.com/en-us/research/uploads/prod/2016/12/Time-Clocks-and-the-Ordering-of-Events-in-a-Distributed-System.pdf}}.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}[fragile]
+	``Concurrency is the composition of independently executing processes, typically functions, but they don't have to be.''
+
+	``Parallelism is the simultaneous execution of multiple things, possibly related, possibly not.''
+
+Rob Pike
+
+\end{frame}
+\begin{frame}[fragile]
+	\begin{figure}
+		\includegraphics[height=.8\textheight]{rob_talk}
+		\caption{\url{https://www.youtube.com/watch?v=cN_DpYBzKso&t=1061s}}
+	\end{figure}
+\end{frame}
+
+\begin{frame}[fragile]
+	\begin{figure}
+		\includegraphics[height=.8\textheight]{tony}
+		\caption{Tony Hoare's seminal paper}
+	\end{figure}
+\end{frame}
+\begin{frame}[fragile]
+``The most obvious application of the new ideas is to the specification, design,
+and implementation of computer systems which continuously act and
+interact with their environment. The basic idea is that these systems can be
+readily decomposed into subsystems which operate concurrently and interact
+with each other as well as with their common environment. The parallel composition
+of subsystems is as simple as the sequential composition of lines or
+statements in a conventional programming language.``
+
+	Tony Hoare (CSP book, 2015)
+\end{frame}
+
+
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class PresenterWithDebouncer(
+        private val base: Contract.Presenter
+) : Contract.Presenter by base {
+
+    override fun onRefresh() {
+        base.onRefresh() // HOW ??
+    }
+}
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Test {
+
+  @Mock
+  lateinit var useCase : UseCase
+
+  lateinit var presenter : Contract.Presenter
+
+  @Before
+  fun setup() {
+      presenter = Presenter(useCase,
+              Dispatchers.Unconfined,
+              Dispatchers.Unconfined
+             )
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+interface Contract {
+
+    interface Presenter {
+        suspend fun onRefresh()
+
+        fun bind(view: View)
+        fun unbind()
+    }
+
+}
+\end{lstlisting}
+\end{frame}
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class SomeFragment : Fragment(), Contract.View {
+  // ...
+
+  override fun showA() = launch(ui){/* ... */}
+  override fun hideA() = launch(ui){/* ... */}
+  override fun showB() = launch(ui){/* ... */}
+  override fun hideB() = launch(ui){/* ... */}
+  override fun showC() = launch(ui){/* ... */}
+  override fun hideC() = launch(ui){/* ... */}
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class SomeFragment : Fragment(), Contract.View {
+  // ...
+
+  override fun onViewCreated(view: View, 
+            savedInstanceState: Bundle?) {
+    swipeRefresh.setOnRefreshListener { 
+       launch(io){presenter.refresh()}
+    }
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+
+\section{Before structured concurrency}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter(
+  private val useCase: UseCase,
+  private val ui: CoroutineDispatcher,
+  private val io: CoroutineDispatcher
+) : Contract.Presenter {
+
+  private var view: Contract.View? = null
+  private val jobs = mutableListOf<Job>()
+  override fun onRefresh() {
+    jobs += launch(ui) {/*...*/}
+  }
+  override fun unbind() {
+    view = null
+    jobs.forEach { it.cancel() } 
+    jobs.clear() 
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter(
+  private val useCase: UseCase,
+  private val ui: Scheduler,
+  private val io: Scheduler
+) : Contract.Presenter {
+
+  private val bag = CompositeDisposable()
+
+  override fun onRefresh() {
+    bag.add(
+      useCase
+        .observeOn( /*...*/ )
+        .subscribeOn( /*...*/ )
+        .subscribe { /* ... */ }
+    )
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter(
+  private val useCase: UseCase,
+  private val ui: Scheduler,
+  private val io: Scheduler
+) : Contract.Presenter {
+
+  private val bag = CompositeDisposable()
+
+  override fun unbind() {
+    view = null
+    bag.clear() // not dispose!
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+	\begin{alertblock}{Question}
+Why disposing?
+\end{alertblock}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter(
+  private val useCase: UseCase,
+  private val ui: CoroutineDispatcher,
+  private val io: CoroutineDispatcher
+) : Contract.Presenter {
+
+  private var view: Contract.View? = null
+  private val jobs = mutableListOf<Job>()
+
+  override fun unbind() {
+    view = null
+    jobs.forEach { it.cancel() } // release resource 
+    jobs.clear() // avoid memory leaks
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+	\begin{alertblock}{Question}
+Why a list and not only one reference?
+\end{alertblock}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+	\begin{alertblock}{Question}
+Why is it error prone?
+\end{alertblock}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
 \begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
 \end{lstlisting}
 \end{frame}
@@ -435,118 +960,6 @@ Cons:%
 \end{lstlisting}
 \end{frame}
 
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
 
 \begin{frame}[fragile]
 \begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
@@ -706,7 +1119,6 @@ Cons:%
 
 
 
-\section{Without structured concurrency}
 
 
 
