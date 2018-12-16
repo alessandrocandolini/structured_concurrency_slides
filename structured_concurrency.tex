@@ -793,14 +793,11 @@ class SomeFragment : Fragment(), Contract.View {
 
 \begin{frame}[fragile]
 \begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-class Presenter(
-  private val useCase: UseCase,
-  private val ui: CoroutineDispatcher,
-  private val io: CoroutineDispatcher
-) : Contract.Presenter {
+class Presenter( /*...*/ ) : Contract.Presenter {
 
   private var view: Contract.View? = null
   private val jobs = mutableListOf<Job>()
+
   override fun onRefresh() {
     jobs += launch(ui) {/*...*/}
   }
@@ -866,15 +863,14 @@ Why disposing?
 
 \begin{frame}[fragile]
 \begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-class Presenter(
-  private val useCase: UseCase,
-  private val ui: CoroutineDispatcher,
-  private val io: CoroutineDispatcher
-) : Contract.Presenter {
+class Presenter( /*...*/ ) : Contract.Presenter {
 
   private var view: Contract.View? = null
   private val jobs = mutableListOf<Job>()
 
+  override fun onRefresh() {
+    jobs += launch(ui) {/*...*/}
+  }
   override fun unbind() {
     view = null
     jobs.forEach { it.cancel() } // release resource 
@@ -889,9 +885,23 @@ class Presenter(
 Why a list and not only one reference?
 \end{alertblock}
 \end{frame}
-
 \begin{frame}[fragile]
 \begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter( /*...*/ ) : Contract.Presenter {
+
+  private var view: Contract.View? = null
+  private val jobs = mutableListOf<Job>()
+
+  override fun onA(){ jobs += launch(ui){/*...*/}}
+  override fun onB(){ jobs += launch(ui){/*...*/}}
+  override fun onC(){ jobs += launch(ui){/*...*/}}
+  
+  override fun unbind() {
+    view = null
+    jobs.forEach { it.cancel() } 
+    jobs.clear() 
+  }
+}
 \end{lstlisting}
 \end{frame}
 
@@ -903,6 +913,30 @@ Why is it error prone?
 
 \begin{frame}[fragile]
 \begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter( /*...*/ ) : Contract.Presenter {
+
+  private var view: Contract.View? = null
+  private val jobs = mutableListOf<Job>()
+
+  override fun onA(){ jobs += launch(ui){/*...*/}}
+  override fun onB(){ launch(ui){/*leaking*/}}
+  override fun onC(){ jobs += launch(ui){/*...*/}}
+  
+  override fun unbind() {
+    view = null
+    jobs.forEach { it.cancel() } 
+    jobs.clear() 
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+
 \end{lstlisting}
 \end{frame}
 
