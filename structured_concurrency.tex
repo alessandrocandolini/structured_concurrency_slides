@@ -597,6 +597,12 @@ fun onRefresh() {
 and
 \begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
 suspend fun onRefresh() { 
+      /*...*/
+}
+\end{lstlisting}
+and 
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+suspend fun onRefresh() { 
   launch(dispatcher) { 
       /*...*/
   }
@@ -906,8 +912,13 @@ class Presenter( /*...*/ ) : Contract.Presenter {
 \end{frame}
 
 \begin{frame}[fragile]
+	\begin{alertblock}{Assumption}
+all processes are independent and can run concurrently (otherwise, need to handle concurrency/coordination via channels, actors, etc) 
+\end{alertblock}
+\end{frame}
+\begin{frame}[fragile]
 	\begin{alertblock}{Question}
-Why is it error prone?
+Why is adding to the list manually error prone?
 \end{alertblock}
 \end{frame}
 
@@ -932,235 +943,380 @@ class Presenter( /*...*/ ) : Contract.Presenter {
 \end{frame}
 
 
-
-
 \begin{frame}[fragile]
+\frametitle{Parallel decomposition}
 \begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+suspend fun fetch() : List<Model> {
 
+ val deferredA = async{ /* source A */ }
+ val deferredB = async{ /* source B */ }
+ val deferredC = async{ /* source C */ }
+
+ val modelA = deferredA.await() 
+ val modelB = deferredB.await() 
+ val modelC = deferredC.await() 
+ return modelA + modelB + modelC
+}
 \end{lstlisting}
 \end{frame}
 
 
 \begin{frame}[fragile]
 \begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+suspend fun fetch() : List<Model> {
+
+ val deferredA = async{/*long running task*/}
+ val deferredB = async{/*quickly throws exception*/}
+ val deferredC = async{/*...*/ }
+
+ val modelA = deferredA.await()  // <-- wait A
+ val modelB = deferredB.await() 
+ val modelC = deferredC.await() 
+ return modelA + modelB + modelC
+}
 \end{lstlisting}
 \end{frame}
-
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-\begin{frame}[fragile]
-\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
-\end{lstlisting}
-\end{frame}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 \section{Welcome structured concurrency}
 
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+
+val scope : CoroutineScope = /*...*/
+
+fun onRefh() {
+  scope.launch {/*...*/}
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+
+val scope : CoroutineScope = /*...*/
+val dispatcher : CoroutineDispatcher = /*...*/
+
+fun onRefresh() {
+  scope.launch(dispatcher){/*...*/}
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+
+val scope : CoroutineScope = /*...*/
+val dispatcher : CoroutineDispatcher = /*...*/
+
+fun CoroutineScope.onRefresh() { // convention 
+  launch(dispatcher){/*...*/}
+}
+
+\end{lstlisting}
+\end{frame}
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+
+val scope : CoroutineScope = /*...*/
+val dispatcher : CoroutineDispatcher = /*...*/
+
+fun onRefresh() {
+  scope.launch{ // parent 
+     launch(dispatcher){ // child 
+       /*...*/
+     }
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter( /*...*/ ) : 
+      Contract.Presenter, CoroutineScope {
+
+  override fun onRefresh() {
+    launch {/*...*/}
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter( scope : CoroutineScope) : 
+      Contract.Presenter, CoroutineScope by scope {
+
+  override fun onRefresh() {
+    launch {/*...*/}
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter( /*...*/) : 
+          Contract.Presenter, CoroutineScope {
+
+  private lateinit var job : Job
+  override val coroutineContext: CoroutineContext
+    get() = ui + job
+
+  override fun bind(view : View) {
+    job = Job()  
+  }
+
+  override fun onRefresh() {
+    launch(ui) {/*...*/}
+  }
+  override fun unbind() {
+    job.cancel()
+  }
+}
+\end{lstlisting}
+\end{frame}
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+class Presenter( /*...*/ ) : Contract.Presenter,
+   CorotuineScope {
+
+  override fun onA(){ launch{/*...*/}}
+  override fun onB(){ launch{/*...*/}}
+  override fun onC(){ launch{/*...*/}}
+  
+  override fun unbind() {
+    job.cancel() 
+  }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+Show code:
+\begin{itemize}
+\item Testability 
+\item Parallel decomposition example 
+\end{frame}
+
 
 \section{Exceptions}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily]
+\end{lstlisting}
+\end{frame}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
